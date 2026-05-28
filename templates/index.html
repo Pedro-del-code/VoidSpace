@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#030814" />
+  <title>Void Striker</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #030814;
+      touch-action: none;
+      -webkit-user-select: none; user-select: none;
+    }
+
+    #gameCanvas {
+      display: block;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    /* Loading screen */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: #030814;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 100;
+      transition: opacity 0.6s;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+
+    .loader-title {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(28px, 8vw, 52px);
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 6px;
+      text-shadow: 0 0 30px #00eeff, 0 0 60px rgba(0,200,255,0.4);
+    }
+    .loader-sub {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(14px, 4vw, 22px);
+      color: #aa88ff;
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px #aa44ff;
+    }
+
+    .loader-bar-wrap {
+      width: 200px; height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .loader-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #00eeff, #aa44ff);
+      border-radius: 3px;
+      animation: loadAnim 1.2s cubic-bezier(0.4,0,0.2,1) forwards;
+      box-shadow: 0 0 12px #00eeff;
+    }
+    @keyframes loadAnim {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+
+    /* Mobile autofire toggle */
+    #autofireBtn {
+      position: fixed;
+      bottom: env(safe-area-inset-bottom, 16px);
+      right: 16px;
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      border: 2px solid rgba(0,200,255,0.4);
+      background: rgba(0,5,30,0.8);
+      color: #00eeff;
+      font-family: 'Orbitron', monospace;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      z-index: 50;
+      transition: background 0.2s, border-color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #autofireBtn.active {
+      background: rgba(0,100,200,0.6);
+      border-color: #00eeff;
+      box-shadow: 0 0 16px rgba(0,200,255,0.5);
+    }
+    #autofireBtn .icon { font-size: 20px; }
+
+    /* Mute button */
+    #muteBtn {
+      position: fixed;
+      bottom: env(safe-area-inset-bottom, 16px);
+      right: 84px;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(170,136,255,0.4);
+      background: rgba(0,5,30,0.7);
+      color: #aa88ff;
+      font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      z-index: 50;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loader -->
+  <div id="loader">
+    <div class="loader-title">VOID</div>
+    <div class="loader-sub">STRIKER</div>
+    <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Mobile controls -->
+  <button id="autofireBtn" aria-label="Auto Fire">
+    <span class="icon">🔫</span>
+    <span id="afLabel">AUTO</span>
+  </button>
+  <button id="muteBtn" aria-label="Mute">🔊</button>
+
+  <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+  <script>
+    // ── Loader ────────────────────────────────────────────────
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        document.getElementById('loader').classList.add('hidden');
+        setTimeout(() => document.getElementById('loader').remove(), 700);
+      }, 1400);
+    });
+
+    // ── Autofire ──────────────────────────────────────────────
+    let autofire = false;
+    let autofireInterval = null;
+    const afBtn = document.getElementById('autofireBtn');
+    const afLabel = document.getElementById('afLabel');
+
+    afBtn.addEventListener('click', () => {
+      autofire = !autofire;
+      afBtn.classList.toggle('active', autofire);
+      afLabel.textContent = autofire ? 'ON' : 'AUTO';
+      if (autofire) {
+        autofireInterval = setInterval(() => {
+          if (typeof gameState !== 'undefined' && gameState === 'playing') {
+            spawnBullet();
+          }
+        }, 200);
+      } else {
+        clearInterval(autofireInterval);
+      }
+    });
+
+    // ── Sound FX (Web Audio) ──────────────────────────────────
+    let audioCtx = null;
+    let muted = false;
+    const muteBtn = document.getElementById('muteBtn');
+
+    muteBtn.addEventListener('click', () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? '🔇' : '🔊';
+    });
+
+    function getAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    function playBeep(freq = 440, type = 'square', duration = 0.06, vol = 0.15) {
+      if (muted) return;
+      try {
+        const ac = getAudio();
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.connect(gain); gain.connect(ac.destination);
+        osc.type = type; osc.frequency.setValueAtTime(freq, ac.currentTime);
+        gain.gain.setValueAtTime(vol, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+        osc.start(ac.currentTime); osc.stop(ac.currentTime + duration);
+      } catch(e) {}
+    }
+
+    // Hook sounds into game events by patching spawnBullet and explode
+    const _origSpawnBullet = spawnBullet;
+    window.spawnBullet = function() {
+      _origSpawnBullet();
+      playBeep(880, 'square', 0.05, 0.08);
+    };
+
+    const _origExplode = explode;
+    window.explode = function(x, y, color, count) {
+      _origExplode(x, y, color, count);
+      playBeep(120 + Math.random() * 80, 'sawtooth', 0.18, 0.2);
+    };
+
+    const _origLoseLife = loseLife;
+    window.loseLife = function() {
+      _origLoseLife();
+      playBeep(80, 'sawtooth', 0.4, 0.3);
+    };
+  </script>
+</body>
+</html>
